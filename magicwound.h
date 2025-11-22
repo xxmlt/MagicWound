@@ -14,13 +14,13 @@
 // Better Enums 头文件
 #include <enum.h>
 
-// 简单的CRC32校验 (header-only)
+// 简易的CRC32校验 (header-only)
 namespace crc32 {
     uint32_t calculate(const std::string& input);
     std::string generate_checksum(const std::string& input);
 }
 
-// Base64编码库
+// Base64编解码
 namespace base64 {
     std::string encode(const std::string &input);
     std::string decode(const std::string &input);
@@ -32,7 +32,7 @@ BETTER_ENUM(CardType, int,
     Spell = 2        // 法术  
 )
 
-// 定义卡牌属性
+// 定义卡牌元素
 BETTER_ENUM(Element, int,
     Physical = 1,    // 物理
     Light = 2,       // 光
@@ -52,6 +52,41 @@ BETTER_ENUM(Rarity, int,
     Funny = 5
 )
 
+// 定义套牌类型
+BETTER_ENUM(DeckType, int,
+    Standard = 1,    // 标准套牌
+    Casual = 2       // 娱乐套牌
+)
+
+// 人物类
+class Character {
+private:
+    std::string id;
+    std::string name;
+    std::vector<Element> elements;
+    int health;
+    int energy;
+    std::string ability;
+    std::string description;
+
+public:
+    Character(const std::string& id, const std::string& name, 
+              const std::vector<Element>& elements, int health, int energy,
+              const std::string& ability, const std::string& description);
+
+    std::string getId() const { return id; }
+    std::string getName() const { return name; }
+    std::vector<Element> getElements() const { return elements; }
+    int getHealth() const { return health; }
+    int getEnergy() const { return energy; }
+    std::string getAbility() const { return ability; }
+    std::string getDescription() const { return description; }
+
+    bool hasElement(Element element) const;
+    void display() const;
+    std::string elementToString(Element element) const;
+};
+
 // 卡牌类
 class Card {
 private:
@@ -66,11 +101,11 @@ private:
     int defense;
     int health;
 
-    std::string elementToString(Element element) const;
-    std::string rarityToString(Rarity rarity) const;
 
 public:
-    // 修改构造函数，明确初始化type
+    std::string elementToString(Element element) const;
+    std::string rarityToString(Rarity rarity) const;
+    // 修改构造函数以正确初始化type
     Card(const std::string& id, const std::string& name, const std::vector<Element>& elements, 
          int cost, Rarity rarity, const std::string& description,
          int attack = 0, int defense = 0, int health = 0);
@@ -95,30 +130,59 @@ public:
 class Deck {
 private:
     std::string name;
+    DeckType deckType;
     std::vector<std::shared_ptr<Card>> cards;
+    std::vector<std::shared_ptr<Character>> characters;
     std::vector<Element> deckElements;
     std::string deckCode;
+    int maxCardLimit;  // 套牌最大卡牌数量限制
 
     void updateDeckElements();
     void updateDeckCode();
     std::string elementToString(Element element) const;
     std::string cardTypeToString(CardType type) const;
+    std::string deckTypeToString() const;
 
 public:
-    Deck(const std::string& name);
+    Deck(const std::string& name, DeckType type = +DeckType::Standard);
     
     void addCard(const std::shared_ptr<Card>& card);
     bool removeCard(const std::string& cardName);
+    void addCharacter(const std::shared_ptr<Character>& character);
+    bool removeCharacter(const std::string& characterName);
+    
     size_t getCardCount() const;
+    size_t getCharacterCount() const;
     std::string getName() const;
+    DeckType getDeckType() const;
     std::string getDeckCode() const;
+    int getMaxCardLimit() const { return maxCardLimit; }
+    void setMaxCardLimit(int limit) { maxCardLimit = limit; }
     
     std::map<Element, int> getElementDistribution() const;
     void display() const;
-    void shuffle(); // 修复shuffle函数
+    void shuffle(); // 修改shuffle方法
     
-    bool importFromDeckCode(const std::string& code, const std::vector<std::shared_ptr<Card>>& allCards);
+    bool importFromDeckCode(const std::string& code, 
+                           const std::vector<std::shared_ptr<Card>>& allCards,
+                           const std::vector<std::shared_ptr<Character>>& allCharacters);
     static bool isValidDeckCode(const std::string& code);
+    
+    bool isValid() const;
+};
+
+// 人物数据库类
+class CharacterDatabase {
+private:
+    std::vector<std::shared_ptr<Character>> allCharacters;
+    void initializeCharacters();
+
+public:
+    CharacterDatabase();
+    const std::vector<std::shared_ptr<Character>>& getAllCharacters() const;
+    std::shared_ptr<Character> findCharacter(const std::string& name) const;
+    std::shared_ptr<Character> findCharacterById(const std::string& id) const;
+    std::vector<std::shared_ptr<Character>> getCharactersByElement(Element element) const;
 };
 
 // 卡牌数据库类
@@ -134,16 +198,19 @@ public:
     std::shared_ptr<Card> findCardById(const std::string& id) const;
     std::vector<std::shared_ptr<Card>> getCardsByType(CardType type) const;
     std::vector<std::shared_ptr<Card>> getCardsByElement(Element element) const;
+    std::vector<std::shared_ptr<Card>> getCardsByRarity(Rarity rarity) const;
 };
 
-// 游戏管理器类
+// 游戏管理类
 class GameManager {
 private:
     CardDatabase cardDB;
+    CharacterDatabase characterDB;
     std::vector<Deck> decks;
 
 public:
     void displayAllCards() const;
+    void displayAllCharacters() const;
     void createDeck();
     void displayDecks() const;
     void displayDeckDetails() const;

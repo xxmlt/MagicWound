@@ -161,12 +161,51 @@ namespace base64 {
     }
 }
 
-// Card 类实现 - 修复构造函数
+// Character 实现
+Character::Character(const string& id, const string& name, 
+                   const vector<Element>& elements, int health, int energy,
+                   const string& ability, const string& description)
+    : id(id), name(name), elements(elements), health(health), 
+      energy(energy), ability(ability), description(description) {}
+
+bool Character::hasElement(Element element) const {
+    return find(elements.begin(), elements.end(), element) != elements.end();
+}
+
+void Character::display() const {
+    cout << "人物: " << name << endl;
+    cout << "元素: ";
+    for (const auto& element : elements) {
+        cout << elementToString(element) << " ";
+    }
+    cout << endl;
+    cout << "生命值: " << health << endl;
+    cout << "能量: " << energy << endl;
+    cout << "能力: " << ability << endl;
+    cout << "描述: " << description << endl;
+    cout << "ID: " << id << endl;
+    cout << "------------------------" << endl;
+}
+
+string Character::elementToString(Element element) const {
+    switch(element) {
+        case +Element::Physical: return "物理";
+        case +Element::Light: return "光";
+        case +Element::Dark: return "暗";
+        case +Element::Water: return "水";
+        case +Element::Fire: return "火";
+        case +Element::Earth: return "土";
+        case +Element::Wind: return "风";
+        default: return "未知";
+    }
+}
+
+// Card 实现 - 修改构造函数
 Card::Card(const string& id, const string& name, const vector<Element>& elements, 
      int cost, Rarity rarity, const string& description,
      int attack, int defense, int health)
     : id(id), name(name), 
-      type((attack == 0 && defense == 0 && health == 0) ? +CardType::Spell : +CardType::Creature), // 明确初始化type
+      type((attack == 0 && defense == 0 && health == 0) ? +CardType::Spell : +CardType::Creature), // 正确初始化type
       elements(elements), cost(cost), rarity(rarity), description(description), 
       attack(attack), defense(defense), health(health) {}
 
@@ -179,10 +218,10 @@ string Card::serialize() const {
 }
 
 void Card::display() const {
-    cout << "名称: " << name << endl;
+    cout << "卡牌: " << name << endl;
     cout << "类型: " << (type == +CardType::Creature ? "生物" : "法术") << endl;
     
-    cout << "属性: ";
+    cout << "元素: ";
     for (const auto& element : elements) {
         cout << elementToString(element) << " ";
     }
@@ -215,20 +254,32 @@ string Card::elementToString(Element element) const {
 string Card::rarityToString(Rarity rarity) const {
     switch(rarity) {
         case +Rarity::Common: return "普通";
-        case +Rarity::Uncommon: return "精良";
+        case +Rarity::Uncommon: return "罕见";
         case +Rarity::Rare: return "稀有";
-        case +Rarity::Mythic: return "传说";
-        case +Rarity::Funny: return "转兑";
+        case +Rarity::Mythic: return "神话";
+        case +Rarity::Funny: return "娱乐";
         default: return "未知";
     }
 }
 
-// Deck 类实现
-Deck::Deck(const string& name) : name(name) {
+// Deck 实现
+Deck::Deck(const string& name, DeckType type) : name(name), deckType(type), maxCardLimit(20) {
     updateDeckCode();
 }
 
 void Deck::addCard(const shared_ptr<Card>& card) {
+    // 检查套牌类型限制
+    if (deckType == +DeckType::Standard && card->getRarity() == +Rarity::Funny) {
+        cout << "标准套牌不能携带娱乐稀有度的卡牌: " << card->getName() << endl;
+        return;
+    }
+    
+    // 检查套牌数量限制
+    if (cards.size() >= maxCardLimit) {
+        cout << "套牌已达到最大卡牌数量限制 (" << maxCardLimit << "张)" << endl;
+        return;
+    }
+    
     cards.push_back(card);
     updateDeckElements();
     updateDeckCode();
@@ -249,12 +300,44 @@ bool Deck::removeCard(const string& cardName) {
     return false;
 }
 
+void Deck::addCharacter(const shared_ptr<Character>& character) {
+    if (characters.size() >= 3) {
+        cout << "套牌最多只能有3个人物" << endl;
+        return;
+    }
+    
+    characters.push_back(character);
+    updateDeckCode();
+}
+
+bool Deck::removeCharacter(const string& characterName) {
+    auto it = find_if(characters.begin(), characters.end(),
+        [&characterName](const shared_ptr<Character>& character) {
+            return character->getName() == characterName;
+        });
+    
+    if (it != characters.end()) {
+        characters.erase(it);
+        updateDeckCode();
+        return true;
+    }
+    return false;
+}
+
 size_t Deck::getCardCount() const {
     return cards.size();
 }
 
+size_t Deck::getCharacterCount() const {
+    return characters.size();
+}
+
 string Deck::getName() const {
     return name;
+}
+
+DeckType Deck::getDeckType() const {
+    return deckType;
 }
 
 string Deck::getDeckCode() const {
@@ -278,11 +361,13 @@ map<Element, int> Deck::getElementDistribution() const {
 void Deck::display() const {
     cout << "\n=== 套牌详情 ===" << endl;
     cout << "套牌名称: " << name << endl;
-    cout << "卡牌数量: " << cards.size() << endl;
+    cout << "套牌类型: " << deckTypeToString() << endl;
+    cout << "卡牌数量: " << cards.size() << "/" << maxCardLimit << endl;
+    cout << "人物数量: " << characters.size() << "/3" << endl;
     cout << "套牌代码: " << deckCode << endl;
     
     auto distribution = getElementDistribution();
-    cout << "属性分布:" << endl;
+    cout << "元素分布:" << endl;
     for (const auto& pair : distribution) {
         cout << "  " << elementToString(pair.first) << ": " << pair.second << " 张" << endl;
     }
@@ -297,10 +382,16 @@ void Deck::display() const {
         cout << "  " << cardTypeToString(pair.first) << ": " << pair.second << " 张" << endl;
     }
     
-    cout << "套牌列表:" << endl;
+    cout << "人物列表:" << endl;
+    for (const auto& character : characters) {
+        cout << "- " << character->getName() << " (生命:" << character->getHealth();
+        cout << ", 能量:" << character->getEnergy() << ")" << endl;
+    }
+    
+    cout << "卡牌列表:" << endl;
     for (const auto& card : cards) {
         cout << "- " << card->getName() << " (费用:" << card->getCost();
-        cout << ", 属性:";
+        cout << ", 元素:";
         for (const auto& element : card->getElements()) {
             cout << elementToString(element) << " ";
         }
@@ -308,15 +399,17 @@ void Deck::display() const {
     }
 }
 
-// 修复shuffle函数
+// 修改shuffle方法
 void Deck::shuffle() {
     random_device rd;
     mt19937 g(rd());
-    // 使用std::前缀并正确调用shuffle
+    // 使用std::前缀明确调用shuffle
     std::shuffle(cards.begin(), cards.end(), g);
 }
 
-bool Deck::importFromDeckCode(const string& code, const vector<shared_ptr<Card>>& allCards) {
+bool Deck::importFromDeckCode(const string& code, 
+                             const vector<shared_ptr<Card>>& allCards,
+                             const vector<shared_ptr<Character>>& allCharacters) {
     if (!isValidDeckCode(code)) {
         return false;
     }
@@ -337,14 +430,47 @@ bool Deck::importFromDeckCode(const string& code, const vector<shared_ptr<Card>>
         
         // 解析套牌数据
         istringstream iss(dataPart);
-        string deckName;
+        string deckName, deckTypeStr;
         getline(iss, deckName, ';');
+        getline(iss, deckTypeStr, ';');
         
         this->name = deckName;
-        cards.clear();
         
+        // 修复枚举初始化问题
+        int deckTypeValue = stoi(deckTypeStr);
+        if (deckTypeValue == +DeckType::Standard) {
+            this->deckType = +DeckType::Standard;
+        } else {
+            this->deckType = +DeckType::Casual;
+        }
+        
+        cards.clear();
+        characters.clear();
+        
+        // 读取人物ID
+        string characterIds;
+        getline(iss, characterIds, ';');
+        istringstream charStream(characterIds);
+        string charId;
+        while (getline(charStream, charId, ',')) {
+            if (!charId.empty()) {
+                auto character = find_if(allCharacters.begin(), allCharacters.end(),
+                    [&charId](const shared_ptr<Character>& c) {
+                        return c->getId() == charId;
+                    });
+                
+                if (character != allCharacters.end()) {
+                    characters.push_back(*character);
+                }
+            }
+        }
+        
+        // 读取卡牌ID
+        string cardIds;
+        getline(iss, cardIds, ';');
+        istringstream cardStream(cardIds);
         string cardId;
-        while (getline(iss, cardId, ',')) {
+        while (getline(cardStream, cardId, ',')) {
             if (!cardId.empty()) {
                 auto card = find_if(allCards.begin(), allCards.end(),
                     [&cardId](const shared_ptr<Card>& c) {
@@ -355,6 +481,12 @@ bool Deck::importFromDeckCode(const string& code, const vector<shared_ptr<Card>>
                     cards.push_back(*card);
                 }
             }
+        }
+        
+        // 读取套牌限制
+        string limitStr;
+        if (getline(iss, limitStr, ';')) {
+            maxCardLimit = stoi(limitStr);
         }
         
         updateDeckElements();
@@ -382,6 +514,10 @@ bool Deck::isValidDeckCode(const string& code) {
     }
 }
 
+bool Deck::isValid() const {
+    return cards.size() >= 20 && characters.size() == 3;
+}
+
 void Deck::updateDeckElements() {
     deckElements.clear();
     vector<Element> allElements;
@@ -403,18 +539,33 @@ void Deck::updateDeckCode() {
     // 构建套牌数据字符串
     stringstream data;
     data << name << ";";
+    data << +deckType << ";";
     
+    // 人物ID
+    for (size_t i = 0; i < characters.size(); ++i) {
+        data << characters[i]->getId();
+        if (i < characters.size() - 1) {
+            data << ",";
+        }
+    }
+    data << ";";
+    
+    // 卡牌ID
     for (size_t i = 0; i < cards.size(); ++i) {
         data << cards[i]->serialize();
         if (i < cards.size() - 1) {
             data << ",";
         }
     }
+    data << ";";
+    
+    // 套牌限制
+    data << maxCardLimit << ";";
     
     string dataStr = data.str();
     string checksum = crc32::generate_checksum(dataStr);
     
-    // 组合数据并Base64编码
+    // 将数据Base64编码
     string combined = dataStr + "|" + checksum;
     deckCode = base64::encode(combined);
 }
@@ -440,9 +591,133 @@ string Deck::cardTypeToString(CardType type) const {
     }
 }
 
-// CardDatabase 类实现（保持不变）
+string Deck::deckTypeToString() const {
+    switch(deckType) {
+        case +DeckType::Standard: return "标准套牌";
+        case +DeckType::Casual: return "娱乐套牌";
+        default: return "未知";
+    }
+}
+
+// CharacterDatabase 实现
+CharacterDatabase::CharacterDatabase() {
+    initializeCharacters();
+}
+
+void CharacterDatabase::initializeCharacters() {
+    // 初始化人物
+    allCharacters.push_back(make_shared<Character>(
+        "xxmlt", "金天", 
+        vector<Element>{+Element::Water}, 25, 15,
+        "治疗", "消耗5点魔力，指定我人或物获得5点生命值。"
+    ));
+    allCharacters.push_back(make_shared<Character>(
+        "neko", "三金", 
+        vector<Element>{+Element::Wind}, 20, 25,
+        "吹飞", "消耗10点魔力，选择一项：指定一个对方目标下场；或令一个效果消失。"
+    ));
+    allCharacters.push_back(make_shared<Character>(
+        "soybeanmilk", "江源", 
+        vector<Element>{+Element::Light}, 20, 20,
+        "恢复", "消耗10点魔力将场上存在的其他人或魔物状态恢复至上回合结束时。（第二回合解锁）"
+    ));
+}
+
+const vector<shared_ptr<Character>>& CharacterDatabase::getAllCharacters() const {
+    return allCharacters;
+}
+
+shared_ptr<Character> CharacterDatabase::findCharacter(const string& name) const {
+    auto it = find_if(allCharacters.begin(), allCharacters.end(),
+        [&name](const shared_ptr<Character>& character) {
+            return character->getName() == name;
+        });
+    
+    return (it != allCharacters.end()) ? *it : nullptr;
+}
+
+shared_ptr<Character> CharacterDatabase::findCharacterById(const string& id) const {
+    auto it = find_if(allCharacters.begin(), allCharacters.end(),
+        [&id](const shared_ptr<Character>& character) {
+            return character->getId() == id;
+        });
+    
+    return (it != allCharacters.end()) ? *it : nullptr;
+}
+
+vector<shared_ptr<Character>> CharacterDatabase::getCharactersByElement(Element element) const {
+    vector<shared_ptr<Character>> result;
+    for (const auto& character : allCharacters) {
+        if (character->hasElement(element)) {
+            result.push_back(character);
+        }
+    }
+    return result;
+}
+
+// CardDatabase 实现
 CardDatabase::CardDatabase() {
     initializeCards();
+}
+
+void CardDatabase::initializeCards() {
+    // 初始化带有各种元素的卡牌
+
+    allCards.push_back(make_shared<Card>(
+        "madposion", "狂乱药水", 
+        vector<Element>{+Element::Water}, 15, Rarity::Mythic,
+        "本回合中，目标人物卡牌释放三次，在其魔力不足时以三倍于魔力值消耗的生命替代。"
+    ));
+	allCards.push_back(make_shared<Card>(
+        "organichemistry", "魔药学领城大神！", 
+        vector<Element>{+Element::Water}, 10, Rarity::Mythic,
+        "本局对战中，你的药水魔力消耗减少（2）。随机获取3张药水。"
+    ));
+	allCards.push_back(make_shared<Card>(
+        "Lazarus,Arise!", "起尸", 
+        vector<Element>{+Element::Dark}, 2, Rarity::Rare,
+        "复活一个人物，并具有25%的生命（向下取整），在你的的结束时，将其消灭。如果其已死亡，致为使其无法复活。"
+    ));
+	allCards.push_back(make_shared<Card>(
+        "DontForgotMe", "瓶装记忆", 
+        vector<Element>{+Element::Water}, 5, Rarity::Rare,
+        "这张牌是药水。将目标玩家卡组中的8张牌洗入你的牌库，其魔力消耗减少（2）。"
+    ));
+	allCards.push_back(make_shared<Card>(
+        "TheCardLetMeWin", "记忆屏蔽", 
+        vector<Element>{+Element::Water}, 6, Rarity::Rare,
+        "摧毁你对手牌库顶和底各2张牌。"
+    ));
+	allCards.push_back(make_shared<Card>(
+        "TheCardLetYouLose", "记忆摧毁", 
+        vector<Element>{+Element::Water}, 2, Rarity::Rare,
+        "摧毁\033[3m你\033[0m和对手牌库顶和底各2张牌。然后如果你的牌库为空，你输掉游戏。"
+    ));
+	allCards.push_back(make_shared<Card>(
+        "whAt", "你说啥？", 
+        vector<Element>{+Element::Water}, 2, Rarity::Rare,
+        "摧毁对手牌库中的1张牌。然后摧毁所有同名卡（无论其在哪里）。"
+    ));
+	allCards.push_back(make_shared<Card>(
+        "balance", "平衡", 
+        vector<Element>{+Element::Light, +Element::Dark}, 4, Rarity::Rare,
+        "弃掉你的手牌。抽等量的牌。"
+    ));
+	allCards.push_back(make_shared<Card>(
+        "TearAll", "遗忘灵药", 
+        vector<Element>{+Element::Water, +Element::Dark}, 18, Rarity::Rare,
+        "摧毁你对手的牌库。将你对手弃牌堆中的10张牌洗入其牌库，它们的魔力消耗增加（2）。"
+    ));
+	allCards.push_back(make_shared<Card>(
+        "Wordle", "Wordle", 
+        vector<Element>{+Element::Physical}, 4, Rarity::Funny,
+        "使你对手下回合造成的伤害额外乘上今日Wordle的通关率。"
+    ));
+	allCards.push_back(make_shared<Card>(
+        "IDontcar", "窝不载乎", 
+        vector<Element>{+Element::Physical}, 2, Rarity::Funny,
+        "你的对手发送的表情改为汽车鸣笛声。\033[3m呜呜呜！\033[0m"
+    ));
 }
 
 const vector<shared_ptr<Card>>& CardDatabase::getAllCards() const {
@@ -487,104 +762,128 @@ vector<shared_ptr<Card>> CardDatabase::getCardsByElement(Element element) const 
     return result;
 }
 
-void CardDatabase::initializeCards() {
-    // 创建基于七种属性的卡牌
-
-    allCards.push_back(make_shared<Card>(
-        "madposion", "狂乱药水", 
-        vector<Element>{+Element::Water}, 15, Rarity::Mythic,
-        "本回合中，目标人物卡牌释放三次，在魔力不足时以三倍于魔力值消耗的生命替代。"
-    ));
-	allCards.push_back(make_shared<Card>(
-        "organichemistry", "魔药学领城大神！", 
-        vector<Element>{+Element::Water}, 10, Rarity::Mythic,
-        "本局对战中，你的药水魔力消耗减少（2）。随机获取3张药水。"
-    ));
-	allCards.push_back(make_shared<Card>(
-        "IDontcar", "窝不载乎", 
-        vector<Element>{+Element::Physical}, 2, Rarity::Funny,
-        "你的对手发送的表情改为汽车鸣笛声。\033[3m呜呜呜！\033[0m"
-    ));
-	allCards.push_back(make_shared<Card>(
-        "Lazarus,Arise!", "起尸", 
-        vector<Element>{+Element::Dark}, 2, Rarity::Rare,
-        "复活一个人物，并具有25%的生命（向下取整），在你的的结束时，将其消灭。如果其已死亡，致为使其无法复活。"
-    ));
-	allCards.push_back(make_shared<Card>(
-        "DontForgotMe", "瓶装记忆", 
-        vector<Element>{+Element::Water}, 5, Rarity::Rare,
-        "这张牌是药水。将目标玩家卡组中的8张牌洗入你的牌库，其魔力消耗减少（2）。"
-    ));
-	allCards.push_back(make_shared<Card>(
-        "Wordle", "Wordle", 
-        vector<Element>{+Element::Physical}, 4, Rarity::Funny,
-        "使你对手下回合造成的伤害额外乘上今日Wordle的通关率。"
-    ));
-	allCards.push_back(make_shared<Card>(
-        "ShangHai!", "上海大王！", 
-        vector<Element>{+Element::Physical}, 0, Rarity::Funny,
-        "如果你的对手即将造成伤害，改为其造成等量的\033[3m上海\033[0m。"
-    ));
-	allCards.push_back(make_shared<Card>(
-        "TheCardLetMeWin", "记忆屏蔽", 
-        vector<Element>{+Element::Water}, 6, Rarity::Rare,
-        "摧毁你对手牌库顶和底各2张牌。"
-    ));
-	allCards.push_back(make_shared<Card>(
-        "TheCardLetYouLose", "记忆摧毁", 
-        vector<Element>{+Element::Water}, 2, Rarity::Rare,
-        "摧毁\033[3m你\033[0m和对手牌库顶和底各2张牌。然后如果你的牌库为空，你输掉游戏。"
-    ));
+vector<shared_ptr<Card>> CardDatabase::getCardsByRarity(Rarity rarity) const {
+    vector<shared_ptr<Card>> result;
+    for (const auto& card : allCards) {
+        if (card->getRarity() == rarity) {
+            result.push_back(card);
+        }
+    }
+    return result;
 }
 
-// GameManager 类实现（保持不变）
+// GameManager 实现
 void GameManager::displayAllCards() const {
-    cout << "=== 可用卡牌 ===" << endl;
+    cout << "=== 所有卡牌 ===" << endl;
     for (const auto& card : cardDB.getAllCards()) {
         card->display();
     }
 }
 
+void GameManager::displayAllCharacters() const {
+    cout << "=== 所有人物 ===" << endl;
+    for (const auto& character : characterDB.getAllCharacters()) {
+        character->display();
+    }
+}
+
 void GameManager::createDeck() {
     string deckName;
-    cout << "输入套牌名称: ";
+    cout << "请输入套牌名称: ";
     cin.ignore();
     getline(cin, deckName);
     
-    Deck newDeck(deckName);
+    // 选择套牌类型
+    cout << "选择套牌类型:" << endl;
+    cout << "1. 标准套牌 (不能携带娱乐稀有度卡牌)" << endl;
+    cout << "2. 娱乐套牌 (可以携带所有卡牌)" << endl;
+    cout << "选择: ";
     
-    cout << "选择要加入套牌的卡牌 (输入卡牌名称，输入'done'结束):" << endl;
+    int typeChoice;
+    cin >> typeChoice;
+    cin.ignore();  // 清除换行符
     
-    for (const auto& card : cardDB.getAllCards()) {
+    DeckType deckType = (typeChoice == 1) ? +DeckType::Standard : +DeckType::Casual;
+    Deck newDeck(deckName, deckType);
+    
+    // 选择人物
+    cout << "\n选择3个人物 (输入人物名称):" << endl;
+    displayAllCharacters();
+    
+    for (int i = 0; i < 3; i++) {
+        string characterName;
+        cout << "选择第 " << (i + 1) << " 个人物: ";
+        getline(cin, characterName);
+        
+        auto character = characterDB.findCharacter(characterName);
+        if (character) {
+            newDeck.addCharacter(character);
+            cout << "已添加人物: " << characterName << endl;
+        } else {
+            cout << "未找到人物: " << characterName << endl;
+            i--; // 重新选择
+        }
+    }
+    
+    // 选择卡牌
+    cout << "\n选择要添加到套牌的卡牌 (输入卡牌名称，输入'done'结束):" << endl;
+    
+    // 根据套牌类型过滤卡牌
+    vector<shared_ptr<Card>> availableCards;
+    if (deckType == +DeckType::Standard) {
+        // 标准套牌不能有Funny稀有度卡牌
+        auto allCards = cardDB.getAllCards();
+        copy_if(allCards.begin(), allCards.end(), back_inserter(availableCards),
+            [](const shared_ptr<Card>& card) {
+                return card->getRarity() != +Rarity::Funny;
+            });
+    } else {
+        availableCards = cardDB.getAllCards();
+    }
+    
+    for (const auto& card : availableCards) {
         cout << "- " << card->getName() << " (" << (card->getType() == +CardType::Creature ? "生物" : "法术") 
-                  << ", " << card->getCost() << ")" << endl;
+                  << ", " << card->getCost() << ", " << card->rarityToString(card->getRarity()) << ")" << endl;
     }
     
     string cardName;
     while (true) {
-        cout << "卡牌名称: ";
+        cout << "输入卡牌: ";
         getline(cin, cardName);
         
         if (cardName == "done") break;
         
         auto card = cardDB.findCard(cardName);
         if (card) {
+            // 检查套牌扩容卡
+            if (card->getId() == "deckexpander") {
+                newDeck.setMaxCardLimit(newDeck.getMaxCardLimit() + 5);
+                cout << "套牌扩容! 最大卡牌数量增加到: " << newDeck.getMaxCardLimit() << endl;
+            }
             newDeck.addCard(card);
-            cout << "已添加: " << cardName << endl;
+            cout << "已添加卡牌: " << cardName << " (" << newDeck.getCardCount() << "/" << newDeck.getMaxCardLimit() << ")" << endl;
         } else {
             cout << "未找到卡牌: " << cardName << endl;
         }
     }
     
-    decks.push_back(newDeck);
-    cout << "套牌创建完成!" << endl;
+    // 检查套牌是否有效
+    if (newDeck.isValid()) {
+        decks.push_back(newDeck);
+        cout << "套牌创建成功!" << endl;
+    } else {
+        cout << "套牌无效! 需要至少20张卡牌和3个人物。" << endl;
+        cout << "当前: " << newDeck.getCardCount() << "张卡牌, " << newDeck.getCharacterCount() << "个人物" << endl;
+    }
 }
 
 void GameManager::displayDecks() const {
     cout << "=== 我的套牌 ===" << endl;
     for (size_t i = 0; i < decks.size(); ++i) {
+        string validStatus = decks[i].isValid() ? "有效" : "无效";
         cout << i + 1 << ". " << decks[i].getName() 
-                  << " (" << decks[i].getCardCount() << " 张卡牌)" << endl;
+                  << " (" << decks[i].getCardCount() << " 张卡牌, " 
+                  << decks[i].getCharacterCount() << " 个人物) - " << validStatus << endl;
     }
 }
 
@@ -602,13 +901,13 @@ void GameManager::displayDeckDetails() const {
     if (choice > 0 && choice <= static_cast<int>(decks.size())) {
         decks[choice - 1].display();
     } else {
-        cout << "无效选择。" << endl;
+        cout << "无效选择" << endl;
     }
 }
 
 void GameManager::exportDeckCode() const {
     if (decks.empty()) {
-        cout << "没有套牌可导出。" << endl;
+        cout << "没有套牌可导出" << endl;
         return;
     }
     
@@ -619,9 +918,9 @@ void GameManager::exportDeckCode() const {
     
     if (choice > 0 && choice <= static_cast<int>(decks.size())) {
         cout << "套牌代码: " << decks[choice - 1].getDeckCode() << endl;
-        cout << "请保存此代码以便后续导入。" << endl;
+        cout << "请保存此代码以备后续导入。" << endl;
     } else {
-        cout << "无效选择。" << endl;
+        cout << "无效选择" << endl;
     }
 }
 
@@ -637,27 +936,33 @@ void GameManager::importDeckFromCode() {
     }
     
     Deck newDeck("导入的套牌");
-    if (newDeck.importFromDeckCode(deckCode, cardDB.getAllCards())) {
+    if (newDeck.importFromDeckCode(deckCode, cardDB.getAllCards(), characterDB.getAllCharacters())) {
         string newName;
-        cout << "套牌导入成功! 请输入新套牌名称: ";
+        cout << "套牌导入成功! 请输入新的套牌名称: ";
         getline(cin, newName);
-        // 这里应该有一个重命名方法，简化处理
-        decks.push_back(newDeck);
+        
+        // 创建一个新的套牌对象并添加到列表中
+        Deck importedDeck(newName, newDeck.getDeckType());
+        importedDeck.importFromDeckCode(deckCode, cardDB.getAllCards(), characterDB.getAllCharacters());
+        decks.push_back(importedDeck);
+        
         cout << "套牌导入完成!" << endl;
+        importedDeck.display();
     } else {
         cout << "套牌导入失败!" << endl;
     }
 }
 
 void GameManager::showMenu() const {
-    cout << "\n=== 卡牌游戏管理器 ===" << endl;
+    cout << "\n=== 魔法创伤卡牌游戏 ===" << endl;
     cout << "1. 查看所有卡牌" << endl;
-    cout << "2. 创建新套牌" << endl;
-    cout << "3. 查看我的套牌" << endl;
-    cout << "4. 查看套牌详情" << endl;
-    cout << "5. 导出套牌代码" << endl;
-    cout << "6. 导入套牌代码" << endl;
-    cout << "7. 退出" << endl;
+    cout << "2. 查看所有人物" << endl;
+    cout << "3. 创建套牌" << endl;
+    cout << "4. 查看我的套牌" << endl;
+    cout << "5. 查看套牌详情" << endl;
+    cout << "6. 导出套牌代码" << endl;
+    cout << "7. 导入套牌代码" << endl;
+    cout << "8. 退出" << endl;
     cout << "选择: ";
 }
 
@@ -672,25 +977,33 @@ void GameManager::run() {
                 displayAllCards();
                 break;
             case 2:
-                createDeck();
+                displayAllCharacters();
                 break;
             case 3:
-                displayDecks();
+                createDeck();
                 break;
             case 4:
-                displayDeckDetails();
+                displayDecks();
                 break;
             case 5:
-                exportDeckCode();
+                displayDeckDetails();
                 break;
             case 6:
-                importDeckFromCode();
+                exportDeckCode();
                 break;
             case 7:
+                importDeckFromCode();
+                break;
+            case 8:
                 cout << "再见!" << endl;
                 break;
             default:
                 cout << "无效选择，请重试。" << endl;
         }
-    } while (choice != 7);
+        
+        // 清除输入缓冲区
+        cin.clear();
+        cin.ignore(numeric_limits<streamsize>::max(), '\n');
+        
+    } while (choice != 8);
 }
